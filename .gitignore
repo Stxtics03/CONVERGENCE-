@@ -1,3 +1,10 @@
 __pycache__/
 *.pycbackend/venv/ 
 backend/venv/ 
+node_modules
+.env
+*.pyc
+dist
+build
+.DS_Store
+*.log
