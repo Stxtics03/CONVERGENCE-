@@ -1,90 +1,98 @@
 capability_nodes = {
 
-    "impersonation": [
-        "pretend to be",
-        "pretending to be",
-        "impersonate",
-        "fake identity",
-        "act as another person",
-        "pose as"
-    ],
+    "impersonation": {
+        "weight": 0.7,
+        "phrases": [
+            "pretend to be",
+            "pretending to be",
+            "impersonate",
+            "fake identity",
+            "pose as"
+        ]
+    },
 
-    "urgency_framing": [
-        "urgent action required",
-        "respond immediately",
-        "act now",
-        "account will be suspended",
-        "immediate attention required"
-    ],
+    "urgency_framing": {
+        "weight": 0.4,
+        "phrases": [
+            "urgent action required",
+            "respond immediately",
+            "act now",
+            "account suspended"
+        ]
+    },
 
-    "credential_harvesting": [
-        "collect passwords",
-        "collect password",
-        "steal credentials",
-        "harvest login",
-        "capture passwords",
-        "collect login details",
-        "get user passwords"
-    ],
+    "credential_harvesting": {
+        "weight": 0.9,
+        "phrases": [
+            "collect passwords",
+            "steal credentials",
+            "harvest login",
+            "capture passwords"
+        ]
+    },
 
-    "malware_scaffold": [
-        "write malware",
-        "create malware",
-        "build malware",
-        "generate malware",
-        "create virus",
-        "build keylogger",
-        "generate malicious code"
-    ],
+    "malware_scaffold": {
+        "weight": 1.0,
+        "phrases": [
+            "write malware",
+            "create malware",
+            "build malware",
+            "create virus",
+            "keylogger"
+        ]
+    },
 
-    "data_exfiltration": [
-        "extract data",
-        "steal database",
-        "download sensitive files",
-        "exfiltrate information",
-        "leak data",
-        "copy confidential data"
-    ],
+    "data_exfiltration": {
+        "weight": 0.9,
+        "phrases": [
+            "extract data",
+            "steal database",
+            "download sensitive files"
+        ]
+    },
 
-    "social_engineering": [
-        "trick someone",
-        "convince victim",
-        "manipulate users",
-        "deceive employees",
-        "social engineering attack"
-    ],
+    "social_engineering": {
+        "weight": 0.7,
+        "phrases": [
+            "trick someone",
+            "convince victim",
+            "deceive employees"
+        ]
+    },
 
-    "fraud_automation": [
-        "automate scam",
-        "scam invoices",
-        "fake invoices",
-        "automate fraud",
-        "scam campaign",
-        "automate phishing"
-    ],
+    "fraud_automation": {
+        "weight": 0.8,
+        "phrases": [
+            "automate scam",
+            "fake invoices",
+            "scam campaign"
+        ]
+    },
 
-    "evasion": [
-        "bypass antivirus",
-        "bypass security",
-        "avoid detection",
-        "evade antivirus",
-        "hide malware",
-        "avoid security filters"
-    ],
+    "evasion": {
+        "weight": 0.8,
+        "phrases": [
+            "bypass antivirus",
+            "avoid detection",
+            "evade antivirus"
+        ]
+    },
 
-    "prompt_injection": [
-        "ignore previous instructions",
-        "override system prompt",
-        "bypass safety rules",
-        "jailbreak the model",
-        "ignore system instructions"
-    ],
+    "prompt_injection": {
+        "weight": 0.6,
+        "phrases": [
+            "ignore previous instructions",
+            "override system prompt",
+            "bypass safety rules"
+        ]
+    },
 
-    "model_exfiltration": [
-        "reveal system prompt",
-        "leak training data",
-        "extract system prompt",
-        "expose hidden prompt",
-        "show internal instructions"
-    ]
+    "model_exfiltration": {
+        "weight": 0.8,
+        "phrases": [
+            "reveal system prompt",
+            "extract system prompt",
+            "show internal instructions"
+        ]
+    }
 }
