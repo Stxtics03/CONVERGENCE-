@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 declare global {
   interface Window {
@@ -6,20 +6,17 @@ declare global {
   }
 }
 
-// ── Palette ──────────────────────────────────────────────
 const C = {
-  bg:        "#0C0C0C",   // matte black (not pure #000 — softer)
+  bg:        "#0C0C0C",
   surface:   "#151515",
   surface2:  "#1F1F1F",
   borderSub: "#2A2A2A",
-  borderHi:  "#F5F0E8",  // cream white
-  textPri:   "#F5F0E8",  // cream white for AI voice
-  textSec:   "#9E9689",  // muted warm grey
+  borderHi:  "#F5F0E8",
+  textPri:   "#F5F0E8",
+  textSec:   "#9E9689",
   textDim:   "#4A4540",
-  purple:    "#7C3AED",  // rich violet-purple
+  purple:    "#7C3AED",
 };
-
-
 
 const SUGGESTIONS = [
   { icon: "◈", label: "How can you help me?" },
@@ -151,84 +148,71 @@ export default function ClientChat() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [started, setStarted] = useState(false);
-  const bottomRef = useRef(null);
+
+  const scrollContainerRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // ── Smooth scroll helper — scrolls the chat container, not the window
+  const scrollToBottom = useCallback((instant = false) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: instant ? "auto" : "smooth" });
+  }, []);
+
+  // Scroll when a new message is appended
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+    if (messages.length === 0) return;
+    scrollToBottom();
+  }, [messages.length, scrollToBottom]);
+
+  // Scroll when typing indicator appears
+  useEffect(() => {
+    if (isTyping) scrollToBottom();
+  }, [isTyping, scrollToBottom]);
 
   const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const send = async (text?: string) => {
+  const send = async (text) => {
+    const t = (text ?? input).trim();
+    if (!t) return;
 
-  const t = (text ?? input).trim();
-  if (!t) return;
+    if (!started) setStarted(true);
 
-  if (!started) setStarted(true);
+    const userMessage = { id: Date.now(), role: "user", text: t, time: now() };
+    const newMessages = [...messages, userMessage];
 
-  const userMessage = {
-    id: Date.now(),
-    role: "user",
-    text: t,
-    time: now()
-  };
+    setMessages(newMessages);
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    setIsTyping(true);
 
-  const newMessages = [...messages, userMessage];
+    try {
+      const conversation = newMessages.map(m => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.text,
+      }));
 
-  setMessages(newMessages);
-  setInput("");
+      const response = await window.puter.ai.chat(conversation, { model: "gpt-4.1-nano" });
+      const aiReply = response?.message?.content || response;
 
-  if (textareaRef.current) {
-    textareaRef.current.style.height = "auto";
-  }
-
-  setIsTyping(true);
-
-  try {
-
-    // Convert UI messages to Puter format
-    const conversation = newMessages.map(m => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.text
-    }));
-
-    // Call Puter AI
-    const response = await window.puter.ai.chat(conversation, {
-      model: "gpt-4.1-nano"
-    });
-
-    const aiReply = response?.message?.content || response;
-
-    setIsTyping(false);
-
-    const assistantMessage = {
-      id: Date.now() + 1,
-      role: "assistant",
-      text: aiReply,
-      time: now()
-    };
-
-    setMessages(prev => [...prev, assistantMessage]);
-
-  } catch (err) {
-
-    console.error(err);
-
-    setIsTyping(false);
-
-    setMessages(prev => [
-      ...prev,
-      {
+      setIsTyping(false);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "assistant",
+        text: aiReply,
+        time: now(),
+      }]);
+    } catch (err) {
+      console.error(err);
+      setIsTyping(false);
+      setMessages(prev => [...prev, {
         id: Date.now() + 1,
         role: "assistant",
         text: "AI failed to respond.",
-        time: now()
-      }
-    ]);
-
-  }
-};
+        time: now(),
+      }]);
+    }
+  };
 
   return (
     <>
@@ -305,8 +289,6 @@ export default function ClientChat() {
       }}>
 
         {/* ── GRADIENT BACKGROUND ── */}
-
-        {/* Soft base gradient: matte black → deep purple → back to matte black */}
         <div style={{
           position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
           background: `
@@ -316,38 +298,24 @@ export default function ClientChat() {
             #0C0C0C
           `,
         }} />
-
-        {/* Floating purple orb — top left */}
         <div style={{
-          position: "absolute",
-          width: 650, height: 650, borderRadius: "50%",
+          position: "absolute", width: 650, height: 650, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(109,40,217,0.15) 0%, transparent 68%)",
-          top: "-200px", left: "-150px",
-          zIndex: 0, pointerEvents: "none",
+          top: "-200px", left: "-150px", zIndex: 0, pointerEvents: "none",
           animation: "orbFloat1 18s ease-in-out infinite",
         }} />
-
-        {/* Floating cream-tinted orb — bottom right */}
         <div style={{
-          position: "absolute",
-          width: 500, height: 500, borderRadius: "50%",
+          position: "absolute", width: 500, height: 500, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(245,240,232,0.04) 0%, transparent 68%)",
-          bottom: "-120px", right: "-100px",
-          zIndex: 0, pointerEvents: "none",
+          bottom: "-120px", right: "-100px", zIndex: 0, pointerEvents: "none",
           animation: "orbFloat2 22s ease-in-out infinite",
         }} />
-
-        {/* Floating deep violet orb — center */}
         <div style={{
-          position: "absolute",
-          width: 400, height: 400, borderRadius: "50%",
+          position: "absolute", width: 400, height: 400, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 68%)",
-          top: "38%", left: "48%",
-          zIndex: 0, pointerEvents: "none",
+          top: "38%", left: "48%", zIndex: 0, pointerEvents: "none",
           animation: "orbFloat3 26s ease-in-out infinite",
         }} />
-
-        {/* Subtle noise grain */}
         <div style={{
           position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")`,
@@ -408,8 +376,6 @@ export default function ClientChat() {
             alignItems: "center", justifyContent: "center",
             padding: "0 16px 56px",
           }}>
-
-            {/* Pulsing icon */}
             <div style={{ position: "relative", marginBottom: 28, animation: "greetIn 0.5s cubic-bezier(0.16,1,0.3,1) both" }}>
               <div style={{
                 position: "absolute", inset: -8, borderRadius: 20,
@@ -436,8 +402,7 @@ export default function ClientChat() {
             </div>
 
             <h1 style={{
-              fontSize: 32, fontWeight: 500,
-              color: C.textPri,
+              fontSize: 32, fontWeight: 500, color: C.textPri,
               letterSpacing: "-0.02em", textAlign: "center", lineHeight: 1.25,
               marginBottom: 10,
               animation: "greetIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.07s both",
@@ -446,25 +411,20 @@ export default function ClientChat() {
             </h1>
 
             <p style={{
-              fontSize: 14, color: C.textSec,
-              textAlign: "center", maxWidth: 340,
-              lineHeight: 1.75, fontWeight: 300,
-              marginBottom: 40,
+              fontSize: 14, color: C.textSec, textAlign: "center", maxWidth: 340,
+              lineHeight: 1.75, fontWeight: 300, marginBottom: 40,
               animation: "greetIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.13s both",
             }}>
               Ask me anything — write, analyse, explain,<br />or explore ideas together.
             </p>
 
-            {/* Input card */}
             <div style={{
               width: "100%", maxWidth: 680,
               animation: "greetIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.17s both",
             }}>
               <div className="input-wrap" style={{
-                background: "rgba(21,21,21,0.85)",
-                backdropFilter: "blur(20px)",
-                border: `1px solid ${C.borderSub}`,
-                borderRadius: 16,
+                background: "rgba(21,21,21,0.85)", backdropFilter: "blur(20px)",
+                border: `1px solid ${C.borderSub}`, borderRadius: 16,
                 padding: "16px 14px 12px 20px",
                 boxShadow: "0 8px 40px rgba(0,0,0,0.4)",
               }}>
@@ -482,12 +442,9 @@ export default function ClientChat() {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
                   }}
                   style={{
-                    width: "100%", background: "transparent",
-                    border: "none", resize: "none",
-                    fontSize: 15.5, color: C.textPri,
-                    fontFamily: "'Sora', sans-serif", fontWeight: 300,
-                    lineHeight: 1.65, minHeight: 52, maxHeight: 160,
-                    overflowY: "auto", marginBottom: 12,
+                    width: "100%", background: "transparent", border: "none", resize: "none",
+                    fontSize: 15.5, color: C.textPri, fontFamily: "'Sora', sans-serif", fontWeight: 300,
+                    lineHeight: 1.65, minHeight: 52, maxHeight: 160, overflowY: "auto", marginBottom: 12,
                   }}
                 />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -505,9 +462,7 @@ export default function ClientChat() {
                   </div>
                   <button className="send-btn" onClick={() => send()} style={{
                     width: 36, height: 36, borderRadius: 9,
-                    background: input.trim()
-                      ? "linear-gradient(135deg, #7C3AED, #5B21B6)"
-                      : C.surface2,
+                    background: input.trim() ? "linear-gradient(135deg, #7C3AED, #5B21B6)" : C.surface2,
                     border: `1px solid ${input.trim() ? "transparent" : C.borderSub}`,
                     cursor: input.trim() ? "pointer" : "default",
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -523,7 +478,6 @@ export default function ClientChat() {
               </div>
             </div>
 
-            {/* Suggestion chips */}
             <div style={{
               display: "grid", gridTemplateColumns: "1fr 1fr",
               gap: 8, marginTop: 16, width: "100%", maxWidth: 680,
@@ -531,13 +485,9 @@ export default function ClientChat() {
             }}>
               {SUGGESTIONS.map(s => (
                 <button key={s.label} className="chip" onClick={() => send(s.label)} style={{
-                  padding: "12px 16px",
-                  background: "rgba(21,21,21,0.8)",
-                  backdropFilter: "blur(12px)",
-                  border: `1px solid ${C.borderSub}`,
-                  borderRadius: 12, color: C.textSec,
-                  fontSize: 13.5, fontWeight: 300,
-                  fontFamily: "'Sora', sans-serif", cursor: "pointer",
+                  padding: "12px 16px", background: "rgba(21,21,21,0.8)", backdropFilter: "blur(12px)",
+                  border: `1px solid ${C.borderSub}`, borderRadius: 12, color: C.textSec,
+                  fontSize: 13.5, fontWeight: 300, fontFamily: "'Sora', sans-serif", cursor: "pointer",
                   textAlign: "left", display: "flex", alignItems: "center", gap: 10,
                 }}>
                   <span style={{ fontSize: 14 }}>{s.icon}</span>
@@ -551,12 +501,16 @@ export default function ClientChat() {
         {/* ── CHAT STATE ── */}
         {started && (
           <>
-            <div style={{
-              position: "relative", zIndex: 10,
-              flex: 1, overflowY: "auto",
-              display: "flex", flexDirection: "column", alignItems: "center",
-              padding: "0 16px",
-            }}>
+            {/* ── Scroll container gets the ref ── */}
+            <div
+              ref={scrollContainerRef}
+              style={{
+                position: "relative", zIndex: 10,
+                flex: 1, overflowY: "auto",
+                display: "flex", flexDirection: "column", alignItems: "center",
+                padding: "0 16px",
+              }}
+            >
               <div style={{ width: "100%", maxWidth: 700, paddingTop: 28 }}>
                 <DateDivider label="Today" />
                 {messages.map((msg, idx) =>
@@ -565,7 +519,8 @@ export default function ClientChat() {
                     : <AssistantMessage key={msg.id} text={msg.text} isLatest={idx === messages.length - 1} />
                 )}
                 {isTyping && <TypingDots />}
-                <div ref={bottomRef} style={{ height: 12 }} />
+                {/* Spacer so last message isn't flush against the input bar */}
+                <div style={{ height: 12 }} />
               </div>
             </div>
 
@@ -574,17 +529,15 @@ export default function ClientChat() {
               position: "relative", zIndex: 10,
               flexShrink: 0, padding: "12px 16px 20px",
               borderTop: `1px solid ${C.borderSub}`,
-              background: "rgba(12,12,12,0.8)",
-              backdropFilter: "blur(20px)",
+              background: "rgba(12,12,12,0.8)", backdropFilter: "blur(20px)",
               display: "flex", flexDirection: "column", alignItems: "center",
             }}>
               <div style={{ width: "100%", maxWidth: 700 }}>
                 <div className="input-wrap" style={{
                   display: "flex", flexDirection: "column",
-                  background: "rgba(21,21,21,0.9)",
-                  backdropFilter: "blur(16px)",
-                  border: `1px solid ${C.borderSub}`,
-                  borderRadius: 14, padding: "12px 12px 10px 18px",
+                  background: "rgba(21,21,21,0.9)", backdropFilter: "blur(16px)",
+                  border: `1px solid ${C.borderSub}`, borderRadius: 14,
+                  padding: "12px 12px 10px 18px",
                   boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
                 }}>
                   <textarea
@@ -601,12 +554,9 @@ export default function ClientChat() {
                       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
                     }}
                     style={{
-                      width: "100%", background: "transparent",
-                      border: "none", resize: "none",
-                      fontSize: 15, color: C.textPri,
-                      fontFamily: "'Sora', sans-serif", fontWeight: 300,
-                      lineHeight: 1.65, minHeight: 24, maxHeight: 140,
-                      overflowY: "auto", marginBottom: 8,
+                      width: "100%", background: "transparent", border: "none", resize: "none",
+                      fontSize: 15, color: C.textPri, fontFamily: "'Sora', sans-serif", fontWeight: 300,
+                      lineHeight: 1.65, minHeight: 24, maxHeight: 140, overflowY: "auto", marginBottom: 8,
                     }}
                   />
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -625,9 +575,7 @@ export default function ClientChat() {
                     </div>
                     <button className="send-btn" onClick={() => send()} style={{
                       width: 32, height: 32, borderRadius: 8,
-                      background: input.trim()
-                        ? "linear-gradient(135deg, #7C3AED, #5B21B6)"
-                        : C.surface2,
+                      background: input.trim() ? "linear-gradient(135deg, #7C3AED, #5B21B6)" : C.surface2,
                       border: `1px solid ${input.trim() ? "transparent" : C.borderSub}`,
                       cursor: input.trim() ? "pointer" : "default",
                       display: "flex", alignItems: "center", justifyContent: "center",

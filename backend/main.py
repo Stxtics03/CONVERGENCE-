@@ -66,11 +66,18 @@ async def analyze_prompt(request: PromptRequest):
 
 @app.post("/chat")
 async def chat(request: PromptRequest):
-    try:
-        response = await generate_chat_response(request.prompt)
-        return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    analysis = await process_prompt(request)
+
+    if analysis.tier == 3:
+        return {"blocked": True}
+
+    response = await generate_chat_response(request.prompt)
+
+    return {
+        "analysis": analysis,
+        "response": response
+    }
 
 
 # ----------------------------

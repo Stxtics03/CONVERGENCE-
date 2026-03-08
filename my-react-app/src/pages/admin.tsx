@@ -13,7 +13,7 @@ interface Message {
   time: string
 }
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 declare global {
   interface Window {
@@ -21,7 +21,6 @@ declare global {
   }
 }
 
-// ── Palette ──────────────────────────────────────────────
 const C = {
   bg:        "#0C0C0C",
   surface:   "#151515",
@@ -214,17 +213,39 @@ export default function Admin() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const chatEndRef  = useRef<HTMLDivElement | null>(null);
-  const logEndRef   = useRef<HTMLDivElement | null>(null);
+  const textareaRef      = useRef<HTMLTextAreaElement | null>(null);
+  const chatScrollRef    = useRef<HTMLDivElement | null>(null);   // replaces chatEndRef
+  const logScrollRef     = useRef<HTMLDivElement | null>(null);   // replaces logEndRef
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  // ── Scroll helpers — target the overflow containers, not the window
+  const scrollChatToBottom = useCallback((instant = false) => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: instant ? "auto" : "smooth" });
+  }, []);
 
+  const scrollLogToBottom = useCallback(() => {
+    const el = logScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
+
+  // Chat: scroll only when message count changes (new message added)
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [logs]);
+    if (messages.length === 0) return;
+    scrollChatToBottom();
+  }, [messages.length, scrollChatToBottom]);
+
+  // Chat: scroll when typing indicator appears
+  useEffect(() => {
+    if (isTyping) scrollChatToBottom();
+  }, [isTyping, scrollChatToBottom]);
+
+  // Logs: scroll when a new log entry is added
+  useEffect(() => {
+    if (logs.length === 0) return;
+    scrollLogToBottom();
+  }, [logs.length, scrollLogToBottom]);
 
   const analyzePrompt = async (prompt: string) => {
     try {
@@ -237,32 +258,26 @@ export default function Admin() {
       if (!res.ok) throw new Error("Analyzer request failed");
 
       const data = await res.json();
-      const riskScore = typeof data.risk_score === "number" ? data.risk_score : 0;
-      const tier      = typeof data.tier === "number" ? data.tier : 1;
-      const level     = tier === 3 ? "ERROR" : tier === 2 ? "WARN" : "INFO";
+      const riskScore = typeof data.final_risk_score === "number" ? data.final_risk_score : 0;
+      const tier = data.tier ?? 1;
+      const level = tier === 3 ? "ERROR" : tier === 2 ? "WARN" : "INFO";
 
-      setLogs(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          level,
-          event: `Risk score ${riskScore.toFixed(2)} tier ${tier}`,
-          user: "CONVERGENCE",
-        },
-      ]);
+      setLogs(prev => [...prev, {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        level,
+        event: `Risk score ${riskScore.toFixed(3)} | Tier ${tier}`,
+        user: "CONVERGENCE",
+      }]);
     } catch (err) {
       console.error(err);
-      setLogs(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          level: "ERROR",
-          event: "Analyzer request failed",
-          user: "frontend",
-        },
-      ]);
+      setLogs(prev => [...prev, {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        level: "ERROR",
+        event: "Analyzer request failed",
+        user: "frontend",
+      }]);
     }
   };
 
@@ -301,26 +316,20 @@ export default function Admin() {
           ? response
           : response?.message?.content ?? "No response from AI.";
 
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: aiReply,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "assistant",
+        text: aiReply,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }]);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: "AI failed to respond.",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "assistant",
+        text: "AI failed to respond.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }]);
     }
 
     setIsTyping(false);
@@ -417,22 +426,19 @@ export default function Admin() {
         <div style={{
           position: "absolute", width: 650, height: 650, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(109,40,217,0.15) 0%, transparent 68%)",
-          top: "-200px", left: "-150px",
-          zIndex: 0, pointerEvents: "none",
+          top: "-200px", left: "-150px", zIndex: 0, pointerEvents: "none",
           animation: "orbFloat1 18s ease-in-out infinite",
         }} />
         <div style={{
           position: "absolute", width: 500, height: 500, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(245,240,232,0.04) 0%, transparent 68%)",
-          bottom: "-120px", right: "-100px",
-          zIndex: 0, pointerEvents: "none",
+          bottom: "-120px", right: "-100px", zIndex: 0, pointerEvents: "none",
           animation: "orbFloat2 22s ease-in-out infinite",
         }} />
         <div style={{
           position: "absolute", width: 400, height: 400, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 68%)",
-          top: "38%", left: "48%",
-          zIndex: 0, pointerEvents: "none",
+          top: "38%", left: "48%", zIndex: 0, pointerEvents: "none",
           animation: "orbFloat3 26s ease-in-out infinite",
         }} />
         <div style={{
@@ -502,9 +508,7 @@ export default function Admin() {
             background: "rgba(12,12,12,0.5)",
             backdropFilter: "blur(8px)",
           }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10, marginBottom: 20,
-            }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
               <h3 style={{
                 color: C.textPri, fontWeight: 500, fontSize: 14,
                 fontFamily: "'Sora', sans-serif", letterSpacing: "0.02em",
@@ -519,7 +523,8 @@ export default function Admin() {
               )}
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto" }}>
+            {/* ── Log scroll container gets the ref ── */}
+            <div ref={logScrollRef} style={{ flex: 1, overflowY: "auto" }}>
               {logs.length === 0 && (
                 <div style={{
                   display: "flex", flexDirection: "column", alignItems: "center",
@@ -539,7 +544,6 @@ export default function Admin() {
                 </div>
               )}
               {logs.map(log => <LogRow key={log.id} log={log} />)}
-              <div ref={logEndRef} />
             </div>
           </div>
 
@@ -556,8 +560,6 @@ export default function Admin() {
                 alignItems: "center", justifyContent: "center",
                 padding: "0 16px 40px",
               }}>
-
-                {/* Pulsing icon */}
                 <div style={{ position: "relative", marginBottom: 28, animation: "greetIn 0.5s cubic-bezier(0.16,1,0.3,1) both" }}>
                   <div style={{
                     position: "absolute", inset: -8, borderRadius: 20,
@@ -603,16 +605,13 @@ export default function Admin() {
                   <br />Risk scores appear in the audit log.
                 </p>
 
-                {/* Input card */}
                 <div style={{
                   width: "100%", maxWidth: 580,
                   animation: "greetIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.17s both",
                 }}>
                   <div className="input-wrap" style={{
-                    background: "rgba(21,21,21,0.85)",
-                    backdropFilter: "blur(20px)",
-                    border: `1px solid ${C.borderSub}`,
-                    borderRadius: 16,
+                    background: "rgba(21,21,21,0.85)", backdropFilter: "blur(20px)",
+                    border: `1px solid ${C.borderSub}`, borderRadius: 16,
                     padding: "16px 14px 12px 20px",
                     boxShadow: "0 8px 40px rgba(0,0,0,0.4)",
                   }}>
@@ -628,20 +627,15 @@ export default function Admin() {
                       }}
                       onKeyDown={handleKeyDown}
                       style={{
-                        width: "100%", background: "transparent",
-                        border: "none", resize: "none",
-                        fontSize: 15.5, color: C.textPri,
-                        fontFamily: "'Sora', sans-serif", fontWeight: 300,
-                        lineHeight: 1.65, minHeight: 52, maxHeight: 160,
-                        overflowY: "auto", marginBottom: 12,
+                        width: "100%", background: "transparent", border: "none", resize: "none",
+                        fontSize: 15.5, color: C.textPri, fontFamily: "'Sora', sans-serif", fontWeight: 300,
+                        lineHeight: 1.65, minHeight: 52, maxHeight: 160, overflowY: "auto", marginBottom: 12,
                       }}
                     />
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                       <button className="send-btn" onClick={() => send()} style={{
                         width: 36, height: 36, borderRadius: 9,
-                        background: input.trim()
-                          ? "linear-gradient(135deg, #7C3AED, #5B21B6)"
-                          : C.surface2,
+                        background: input.trim() ? "linear-gradient(135deg, #7C3AED, #5B21B6)" : C.surface2,
                         border: `1px solid ${input.trim() ? "transparent" : C.borderSub}`,
                         cursor: input.trim() ? "pointer" : "default",
                         display: "flex", alignItems: "center", justifyContent: "center",
@@ -657,7 +651,6 @@ export default function Admin() {
                   </div>
                 </div>
 
-                {/* Suggestion chips */}
                 <div style={{
                   display: "grid", gridTemplateColumns: "1fr 1fr",
                   gap: 8, marginTop: 16, width: "100%", maxWidth: 580,
@@ -665,13 +658,9 @@ export default function Admin() {
                 }}>
                   {SUGGESTIONS.map(s => (
                     <button key={s.label} className="chip" onClick={() => send(s.label)} style={{
-                      padding: "12px 16px",
-                      background: "rgba(21,21,21,0.8)",
-                      backdropFilter: "blur(12px)",
-                      border: `1px solid ${C.borderSub}`,
-                      borderRadius: 12, color: C.textSec,
-                      fontSize: 13.5, fontWeight: 300,
-                      fontFamily: "'Sora', sans-serif", cursor: "pointer",
+                      padding: "12px 16px", background: "rgba(21,21,21,0.8)", backdropFilter: "blur(12px)",
+                      border: `1px solid ${C.borderSub}`, borderRadius: 12, color: C.textSec,
+                      fontSize: 13.5, fontWeight: 300, fontFamily: "'Sora', sans-serif", cursor: "pointer",
                       textAlign: "left", display: "flex", alignItems: "center", gap: 10,
                     }}>
                       <span style={{ fontSize: 14 }}>{s.icon}</span>
@@ -685,11 +674,15 @@ export default function Admin() {
             {/* ── CHAT STATE ── */}
             {started && (
               <>
-                <div style={{
-                  flex: 1, overflowY: "auto",
-                  display: "flex", flexDirection: "column", alignItems: "center",
-                  padding: "0 20px",
-                }}>
+                {/* ── Chat scroll container gets the ref ── */}
+                <div
+                  ref={chatScrollRef}
+                  style={{
+                    flex: 1, overflowY: "auto",
+                    display: "flex", flexDirection: "column", alignItems: "center",
+                    padding: "0 20px",
+                  }}
+                >
                   <div style={{ width: "100%", maxWidth: 660, paddingTop: 28 }}>
                     <DateDivider label="Today" />
                     {messages.map((msg, idx) =>
@@ -698,7 +691,7 @@ export default function Admin() {
                         : <AssistantMessage key={msg.id} text={msg.text} isLatest={idx === messages.length - 1} />
                     )}
                     {isTyping && <TypingDots />}
-                    <div ref={chatEndRef} style={{ height: 12 }} />
+                    <div style={{ height: 12 }} />
                   </div>
                 </div>
 
@@ -706,17 +699,15 @@ export default function Admin() {
                 <div style={{
                   flexShrink: 0, padding: "12px 20px 18px",
                   borderTop: `1px solid ${C.borderSub}`,
-                  background: "rgba(12,12,12,0.8)",
-                  backdropFilter: "blur(20px)",
+                  background: "rgba(12,12,12,0.8)", backdropFilter: "blur(20px)",
                   display: "flex", flexDirection: "column", alignItems: "center",
                 }}>
                   <div style={{ width: "100%", maxWidth: 660 }}>
                     <div className="input-wrap" style={{
                       display: "flex", flexDirection: "column",
-                      background: "rgba(21,21,21,0.9)",
-                      backdropFilter: "blur(16px)",
-                      border: `1px solid ${C.borderSub}`,
-                      borderRadius: 14, padding: "12px 12px 10px 18px",
+                      background: "rgba(21,21,21,0.9)", backdropFilter: "blur(16px)",
+                      border: `1px solid ${C.borderSub}`, borderRadius: 14,
+                      padding: "12px 12px 10px 18px",
                       boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
                     }}>
                       <textarea
@@ -731,20 +722,17 @@ export default function Admin() {
                         }}
                         onKeyDown={handleKeyDown}
                         style={{
-                          width: "100%", background: "transparent",
-                          border: "none", resize: "none",
-                          fontSize: 15, color: C.textPri,
-                          fontFamily: "'Sora', sans-serif", fontWeight: 300,
-                          lineHeight: 1.65, minHeight: 24, maxHeight: 140,
-                          overflowY: "auto", marginBottom: 8,
+                          width: "100%", background: "transparent", border: "none", resize: "none",
+                          fontSize: 15, color: C.textPri, fontFamily: "'Sora', sans-serif", fontWeight: 300,
+                          lineHeight: 1.65, minHeight: 24, maxHeight: 140, overflowY: "auto", marginBottom: 8,
                         }}
                       />
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <div style={{ display: "flex", gap: 2 }}>
                           <button className="icon-btn" style={{
                             width: 30, height: 30, borderRadius: 7,
-                            background: "transparent", border: "none",
-                            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                            background: "transparent", border: "none", cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
                           }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                               <path d="M12 5v14M5 12h14" stroke={C.textSec} strokeWidth="1.7" strokeLinecap="round"/>
@@ -752,8 +740,8 @@ export default function Admin() {
                           </button>
                           <button className="icon-btn" style={{
                             width: 30, height: 30, borderRadius: 7,
-                            background: "transparent", border: "none",
-                            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                            background: "transparent", border: "none", cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
                           }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                               <rect x="9" y="2" width="6" height="11" rx="3" stroke={C.textSec} strokeWidth="1.7"/>
@@ -763,9 +751,7 @@ export default function Admin() {
                         </div>
                         <button className="send-btn" onClick={() => send()} disabled={!input.trim() || isTyping} style={{
                           width: 32, height: 32, borderRadius: 8,
-                          background: input.trim()
-                            ? "linear-gradient(135deg, #7C3AED, #5B21B6)"
-                            : C.surface2,
+                          background: input.trim() ? "linear-gradient(135deg, #7C3AED, #5B21B6)" : C.surface2,
                           border: `1px solid ${input.trim() ? "transparent" : C.borderSub}`,
                           cursor: input.trim() ? "pointer" : "default",
                           display: "flex", alignItems: "center", justifyContent: "center",

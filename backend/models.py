@@ -29,7 +29,7 @@ class RiskResponse(BaseModel):
     cross_session_threat: bool
     cross_session_note: str
     allow_response: bool
-
+    
 class SessionPrompt(BaseModel):
     prompt: str
     embedding: List[float]
