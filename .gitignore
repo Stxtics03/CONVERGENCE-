@@ -1,4 +1,14 @@
 __pycache__/
 *.pycbackend/venv/ 
 backend/venv/ 
+<<<<<<< HEAD
 .envbackend/.env 
+=======
+node_modules
+backend/.env
+*.pyc
+dist
+build
+.DS_Store
+*.log
+>>>>>>> 421333b3db1543f685741a49a678d73f963e86c7
