@@ -147,22 +147,6 @@ Score = (0.30×C + 0.40×E + 0.15×V + 0.15×Ledger) × Cross_Session_Modifier
 | GET | `/ledger` | Threat intelligence ledger |
 | DELETE | `/session/{id}` | GDPR right to erasure |
 
----
-
-## 🆚 Competitive Comparison
-
-| Feature | Garak | LLM-Guard | Rebuff | **CONVERGENCE** |
-|---|---|---|---|---|
-| Real-time | ❌ | ✅ | ✅ | ✅ |
-| Multi-turn detection | ❌ | ❌ | ❌ | ✅ |
-| Session memory | ❌ | ❌ | ❌ | ✅ |
-| Cross-session memory | ❌ | ❌ | ❌ | ✅ |
-| Capability graph | ❌ | ❌ | ❌ | ✅ |
-| Velocity fingerprinting | ❌ | ❌ | ❌ | ✅ |
-| Threat ledger | ❌ | ❌ | ❌ | ✅ |
-| Dual-layer defense | ❌ | ❌ | ❌ | ✅ |
-
----
 
 ## ⛓️ Threat Ledger (Mock Blockchain)
 
