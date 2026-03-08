@@ -127,7 +127,7 @@ def get_node_embeddings() -> Dict[str, List[float]]:
         precompute_node_embeddings()
     return _node_embeddings
 
-NODE_TRIGGER_THRESHOLD = 0.40
+NODE_TRIGGER_THRESHOLD = 0.55
 
 CAPABILITY_GROUPS = {
     "phishing": [

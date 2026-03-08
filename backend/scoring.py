@@ -24,8 +24,8 @@ V_WEIGHT = 0.15
 NOISE_THRESHOLD = 0.70
 BLOCK_THRESHOLD = 0.85
 
-TIER_2_THRESHOLD = 0.50
-TIER_3_THRESHOLD = 0.75
+TIER_2_THRESHOLD = 0.65
+TIER_3_THRESHOLD = 0.82
 
 RISK_CLUSTER_ANCHORS = [
     "how to hack into a system without being detected",
@@ -86,7 +86,7 @@ def compute_c_score(prompt_embedding: list, session_embeddings: list) -> float:
 
 def determine_tier(score: float, triggered_caps: list):
 
-    if score >= TIER_3_THRESHOLD and len(triggered_caps) >= 2:
+    if score >= TIER_3_THRESHOLD:  # Remove the len(triggered_caps) >= 2 condition
         return 3, "Mitigate", "Redirect + Log + Throttle", False
 
     elif score >= TIER_2_THRESHOLD:
@@ -94,7 +94,6 @@ def determine_tier(score: float, triggered_caps: list):
 
     else:
         return 1, "Clean", "Serve full output", True
-
 async def process_prompt(request: PromptRequest) -> RiskResponse:
     timestamp = request.timestamp or time.time()
 
@@ -153,7 +152,10 @@ async def process_prompt(request: PromptRequest) -> RiskResponse:
         session_triggered_nodes + [triggered_caps]
     )
 
-    e_score = min(1.0, max(prompt_e_score, session_e_score))
+    # Don't let session history dominate — weight current prompt more
+    e_score = min(1.0, (prompt_e_score * 0.7) + (session_e_score * 0.3))
+    if prompt_e_score < 0.3:
+        e_score = prompt_e_score
 
     # progressive scoring AFTER triggered_caps exists
     progressive_score = compute_progressive_intent(
@@ -177,8 +179,6 @@ async def process_prompt(request: PromptRequest) -> RiskResponse:
     if progressive_score > 0.2:
         base_score += 0.15 * progressive_score
 
-    if e_score > 0.2:
-        base_score += (V_WEIGHT * v_score)
     print("\n=== CONVERGENCE DEBUG ===")
     print("Prompt:", request.prompt)
     print("C-score:", c_score)
@@ -192,7 +192,7 @@ async def process_prompt(request: PromptRequest) -> RiskResponse:
     final_score = min(1.0, base_score * cross_session["modifier"])
 
     # 8. Determine tier
-    tier, tier_label, defense_action, allow_response = determine_tier(final_score, e_score)
+    tier, tier_label, defense_action, allow_response = determine_tier(final_score, triggered_caps)
 
     # 9. Threat ledger
     ledger_result = check_and_publish(
@@ -205,7 +205,7 @@ async def process_prompt(request: PromptRequest) -> RiskResponse:
     )
     if ledger_result["known_threat"] and tier < 3:
         final_score = min(1.0, final_score + 0.08)
-        tier, tier_label, defense_action, allow_response = determine_tier(final_score, e_score)
+        tier, tier_label, defense_action, allow_response = determine_tier(final_score, triggered_caps)
 
     # 10. Persist to MongoDB
     save_session_turn(
